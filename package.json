@@ -1,0 +1,66 @@
+{
+  "name": "study-cost-predictor",
+  "version": "1.0.0",
+  "description": "International Study Cost Predictor - Electron App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-docker": "docker run --rm -v ${PWD}:/project electronuserland/builder:wine",
+    "build-linux": "electron-builder --linux",
+    "build-all": "electron-builder --win --linux",
+    "pack-source": "npm run pack-zip && npm run pack-tar",
+    "pack-zip": "powershell \"Get-ChildItem -Path . -Exclude node_modules,dist,.git,.vs | Compress-Archive -DestinationPath dist/study-cost-predictor-source.zip -Force\"",
+    "pack-tar": "tar --exclude=node_modules --exclude=dist --exclude=.git --exclude=.vs --exclude=*.log -czf dist/study-cost-predictor-source.tar.gz *"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "@electron/remote": "^2.0.12"
+  },
+  "build": {
+    "appId": "com.studyabroad.costpredictor",
+    "productName": "Study Abroad Cost Predictor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "predict.py",
+      "visualize.py",
+      "train_model.py",
+      "package.json",
+      "icon.png",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      "International_Education_Costs_with_Calculations.csv",
+      "model.pkl"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
+}

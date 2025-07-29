@@ -1,0 +1,9 @@
+@echo off
+echo Installing Python dependencies...
+pip install joblib pandas numpy scikit-learn matplotlib seaborn plotly
+
+echo Installing Node.js dependencies...
+npm install
+
+echo Starting Electron application...
+npm start

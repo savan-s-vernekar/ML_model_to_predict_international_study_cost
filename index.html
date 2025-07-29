@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎓 Study Abroad Cost Estimator</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        html, body { height: 100%; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .container { width: 100%; height: 100vh; background: white; padding: 20px; display: flex; flex-direction: column; opacity: 0; transition: opacity 0.3s ease; }
+        .container.loaded { opacity: 1; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .nav button.active { background: #007bff; color: white; }
+        .nav button:not(.active) { background: #2a2626; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 20px; border: none; border-radius: 25px; cursor: pointer; font-weight: 500; margin: 5px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+        .predict-btn { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 12px 24px; font-size: 16px; }
+        #editBtn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .nav button { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .nav button.active { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .result { margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 5px; }
+        .result:has-text('❌') { background: #f8d7da; }
+        .chart-container { margin-top: 20px; }
+        .hidden { display: none; }
+        .error-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .error-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 5px; max-width: 500px; }
+        .error-text { background: #f8f9fa; padding: 10px; border: 1px solid #ddd; margin: 10px 0; font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto; user-select: all; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; position: sticky; top: 0; }
+        td[contenteditable] { background: #fff8dc; }
+        .loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { font-size: 18px; text-align: center; }
+        .result-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 3000; max-width: 400px; text-align: center; }
+        .result-popup h3 { color: #28a745; margin-bottom: 20px; }
+        .result-popup .cost { font-size: 24px; font-weight: bold; color: #007bff; margin: 15px 0; }
+        .popup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2500; }
+        .chart-selector { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 3000; max-width: 500px; }
+        .chart-list { max-height: 300px; overflow-y: auto; margin: 20px 0; }
+        .chart-item { margin: 10px 0; display: flex; align-items: center; }
+        .chart-item input { margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Study Abroad Cost Estimator</h1>
+        
+        <div class="nav">
+            <button id="predictTab" class="active" onclick="showTab('predict')">🎯 Predict Cost</button>
+            <button id="visualizeTab" onclick="showTab('visualize')">📊 Visualize Data</button>
+            <button id="csvTab" onclick="showTab('csv')">📝 Edit CSV</button>
+            <button id="reportTab" onclick="showTab('report')">📄 Reports</button>
+        </div>
+
+        <div id="predictSection">
+            <h3>📝 Enter Your Details</h3>
+            <div class="form-group">
+                <label>⏳ Duration (Years):</label>
+                <input type="number" id="duration" min="0.6" max="5.0" step="0.1" value="2">
+            </div>
+            <div class="form-group">
+                <label>💵 Tuition (USD):</label>
+                <input type="number" id="tuition" min="0" max="62000" value="20000">
+            </div>
+            <div class="form-group">
+                <label>🛏️ Rent (USD):</label>
+                <input type="number" id="rent" min="150" max="2500" value="800">
+            </div>
+            <div class="form-group">
+                <label>🛂 Visa Fee (USD):</label>
+                <input type="number" id="visa_fee" min="40" max="490" value="200">
+            </div>
+            <div class="form-group">
+                <label>🩺 Insurance (USD):</label>
+                <input type="number" id="insurance" min="200" max="1500" value="500">
+            </div>
+            <div class="form-group">
+                <label>💱 Exchange Rate:</label>
+                <input type="number" id="exchange_rate" min="0" max="42150" value="1">
+            </div>
+            <div class="form-group">
+                <label>🏠 Living Cost Index:</label>
+                <input type="number" id="living_cost_index" min="27" max="122" value="70">
+            </div>
+            <button class="predict-btn" onclick="predictCost()">🔍 Predict Cost</button>
+            <div id="result" class="result hidden"></div>
+        </div>
+
+        <div id="visualizeSection" class="hidden">
+            <h3>📊 Data Analysis</h3>
+            <select id="chartSelect" onchange="loadChart(this.value)" style="padding: 10px; margin: 10px; border-radius: 5px; border: 1px solid #ddd; width: 300px;">
+                <option value="">Select Chart Type</option>
+                <option value="heatmap">Correlation Heatmap - Variable Relationships</option>
+                <option value="histogram">Tuition Distribution - Fee Frequency</option>
+                <option value="boxplot">Living Cost by Country - Cost Comparison</option>
+                <option value="scatter">Tuition vs Total Cost - Cost Correlation</option>
+                <option value="bar">Average Cost by Level - Education Levels</option>
+                <option value="pie">Country Distribution - Student Share</option>
+                <option value="violin">Cost Distribution Shape - Data Spread</option>
+                <option value="line">Cost Trends by Duration - Time Analysis</option>
+                <option value="area">Cumulative Costs - Stacked View</option>
+                <option value="bubble">Multi-Factor Analysis - 3D Comparison</option>
+                <option value="radar">Cost Profile Radar - Multi-Metric</option>
+                <option value="treemap">Cost Hierarchy - Nested View</option>
+                <option value="sunburst">Cost Breakdown - Circular Hierarchy</option>
+                <option value="parallel">Multi-Dimensional - Parallel Coordinates</option>
+                <option value="density">Cost Density Map - Heat Distribution</option>
+                <option value="ridge">Cost Ridge Plot - Layered Distribution</option>
+                <option value="strip">Individual Points - Raw Data View</option>
+                <option value="swarm">Point Swarm - Clustered Distribution</option>
+                <option value="joint">Joint Distribution - Dual Variable</option>
+                <option value="pair">Pairwise Comparison - All Variables</option>
+                <option value="facet">Faceted Analysis - Multiple Subplots</option>
+                <option value="waterfall">Cost Waterfall - Component Breakdown</option>
+                <option value="funnel">Cost Funnel - Progressive Analysis</option>
+                <option value="sankey">Flow Diagram - Cost Pathways</option>
+                <option value="gauge">Cost Gauge - Performance Meter</option>
+            </select>
+            <div id="charts" class="chart-container"></div>
+        </div>
+
+        <div id="csvSection" class="hidden">
+            <h3>📝View/Load/Edit Dataset</h3>
+            <button onclick="selectCsvFile()">Select CSV File</button>
+            <button onclick="toggleView()">Toggle View</button>
+            <button id="editBtn" onclick="toggleEdit()">Enable Editing</button>
+            <button onclick="downloadTemplate()">Download Template</button>
+            <button onclick="saveCsv()">Save Changes</button>
+            <div id="csvTable" style="overflow: auto; height: calc(100vh - 200px); border: 1px solid #ddd;"></div>
+            <textarea id="csvEditor" style="width: 100%; height: calc(100vh - 200px); font-family: monospace;" class="hidden"></textarea>
+        </div>
+
+        <div id="reportSection" class="hidden">
+            <h3>📄 Generate Reports</h3>
+            <button onclick="openChartSelector()">Select Charts for Report</button>
+            <button onclick="printReport()">Print Report</button>
+            <div id="reportContent" style="background: white; padding: 20px; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;">
+                <div id="reportData"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCsvPath = 'International_Education_Costs_with_Calculations.csv';
+        let isTableView = true;
+        let isEditingEnabled = false;
+        let lastPrediction = null;
+        let lastInputs = null;
+        
+        function showLoading(text) {
+            const loading = document.createElement('div');
+            loading.className = 'loading';
+            loading.id = 'loadingModal';
+            loading.innerHTML = `
+                <div class="spinner"></div>
+                <div class="loading-text">${text}</div>
+            `;
+            document.body.appendChild(loading);
+        }
+        
+        function hideLoading() {
+            const loading = document.getElementById('loadingModal');
+            if (loading) loading.remove();
+        }
+        
+        function showResultPopup(cost) {
+            const overlay = document.createElement('div');
+            overlay.className = 'popup-overlay';
+            overlay.onclick = () => overlay.remove();
+            
+            const popup = document.createElement('div');
+            popup.className = 'result-popup';
+            popup.innerHTML = `
+                <h3>🎓 Study Cost Prediction</h3>
+                <div class="cost">💰 $${cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                <p>Estimated Total Annual Cost</p>
+                <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px;">Close</button>
+            `;
+            
+            overlay.appendChild(popup);
+            document.body.appendChild(overlay);
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            document.getElementById('predictSection').classList.add('hidden');
+            document.getElementById('visualizeSection').classList.add('hidden');
+            document.getElementById('csvSection').classList.add('hidden');
+            document.getElementById('reportSection').classList.add('hidden');
+            
+            if (tab === 'predict') {
+                document.getElementById('predictTab').classList.add('active');
+                document.getElementById('predictSection').classList.remove('hidden');
+            } else if (tab === 'visualize') {
+                document.getElementById('visualizeTab').classList.add('active');
+                document.getElementById('visualizeSection').classList.remove('hidden');
+            } else if (tab === 'csv') {
+                document.getElementById('csvTab').classList.add('active');
+                document.getElementById('csvSection').classList.remove('hidden');
+                loadDefaultCsv();
+            } else if (tab === 'report') {
+                document.getElementById('reportTab').classList.add('active');
+                document.getElementById('reportSection').classList.remove('hidden');
+            }
+        }
+
+        async function predictCost() {
+            showLoading('🤖 Analyzing your study abroad parameters...<br>🧠 Running ML algorithms to predict costs...');
+            
+            const data = {
+                duration: parseFloat(document.getElementById('duration').value),
+                tuition: parseFloat(document.getElementById('tuition').value),
+                rent: parseFloat(document.getElementById('rent').value),
+                visa_fee: parseFloat(document.getElementById('visa_fee').value),
+                insurance: parseFloat(document.getElementById('insurance').value),
+                exchange_rate: parseFloat(document.getElementById('exchange_rate').value),
+                living_cost_index: parseFloat(document.getElementById('living_cost_index').value)
+            };
+
+            try {
+                const response = await fetch('http://localhost:3000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.error) {
+                    showError('Prediction Error', result.error);
+                } else {
+                    lastPrediction = result.prediction;
+                    lastInputs = data;
+                    showResultPopup(result.prediction);
+                }
+            } catch (error) {
+                hideLoading();
+                showError('Network Error', error.message);
+            }
+        }
+
+        async function loadChart(chartType) {
+            if (!chartType) return;
+            
+            const loadingTexts = {
+                heatmap: '🔥 Generating correlation heatmap...<br>📊 Analyzing data relationships...',
+                histogram: '📊 Creating distribution chart...<br>💰 Processing frequency data...',
+                boxplot: '📦 Building comparison boxplot...<br>🌍 Analyzing statistical ranges...',
+                scatter: '✨ Creating scatter visualization...<br>🔍 Correlating variables...',
+                bar: '📊 Generating bar chart...<br>🎓 Computing averages...',
+                pie: '🍰 Creating pie chart...<br>📊 Calculating proportions...',
+                violin: '🎻 Generating violin plot...<br>📊 Analyzing distribution shape...',
+                line: '📈 Creating trend line...<br>🕰 Processing time series...',
+                area: '🏔 Building area chart...<br>📊 Stacking data layers...',
+                bubble: '🔵 Creating bubble chart...<br>🔍 Multi-factor analysis...',
+                radar: '📰 Generating radar chart...<br>🎯 Multi-metric comparison...',
+                treemap: '🌳 Building treemap...<br>📊 Hierarchical visualization...',
+                sunburst: '☀ Creating sunburst chart...<br>🌀 Circular hierarchy...',
+                parallel: '🔀 Parallel coordinates...<br>📊 Multi-dimensional analysis...',
+                density: '🗺 Density mapping...<br>🔥 Heat distribution...',
+                ridge: '🏔 Ridge plot generation...<br>📊 Layered distributions...',
+                strip: '🔴 Strip chart creation...<br>📊 Raw data points...',
+                swarm: '🐝 Swarm plot building...<br>📊 Clustered distribution...',
+                joint: '🔗 Joint distribution...<br>📊 Dual variable analysis...',
+                pair: '🔄 Pairwise comparison...<br>📊 All variable matrix...',
+                facet: '🖼 Faceted analysis...<br>📊 Multiple subplots...',
+                waterfall: '🌊 Waterfall chart...<br>📊 Component breakdown...',
+                funnel: '📎 Funnel analysis...<br>📊 Progressive view...',
+                sankey: '🌊 Flow diagram...<br>📊 Pathway analysis...',
+                gauge: '📀 Performance gauge...<br>📊 Metric visualization...'
+            };
+            
+            showLoading(loadingTexts[chartType] || '📊 Generating chart...');
+            
+            try {
+                const response = await fetch('http://localhost:3000/visualize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csvPath: currentCsvPath, chartType: chartType })
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.error) {
+                    document.getElementById('charts').innerHTML = `❌ Error: ${result.error}`;
+                    return;
+                }
+                
+                let chartHtml = '';
+                if (result.image) {
+                    chartHtml = `<img src="data:image/png;base64,${result.image}" style="max-width: 100%;">`;
+                } else if (result.plotly) {
+                    chartHtml = `<div id="plotly-chart"></div>`;
+                    document.getElementById('charts').innerHTML = chartHtml;
+                    Plotly.newPlot('plotly-chart', JSON.parse(result.plotly).data, JSON.parse(result.plotly).layout);
+                    return;
+                }
+                document.getElementById('charts').innerHTML = chartHtml;
+            } catch (error) {
+                hideLoading();
+                document.getElementById('charts').innerHTML = `❌ Error loading chart: ${error.message}`;
+            }
+        }
+
+        async function selectCsvFile() {
+            try {
+                const { ipcRenderer } = require('electron');
+                const filePath = await ipcRenderer.invoke('select-csv-file');
+                if (filePath) {
+                    currentCsvPath = filePath;
+                    loadCsvFile(filePath);
+                }
+            } catch (error) {
+                showError('File Selection Error', 'File dialog not available. Please restart the application.');
+            }
+        }
+
+
+
+        async function loadDefaultCsv() {
+            try {
+                const response = await fetch('http://localhost:3000/csv');
+                const result = await response.json();
+                if (result.error) {
+                    showError('CSV Load Error', result.error);
+                    return;
+                }
+                document.getElementById('csvEditor').value = result.data;
+                currentCsvPath = result.path;
+                displayCsvData(result.data);
+                
+                // Update current CSV path for predictions and visualizations
+                await fetch('http://localhost:3000/update-csv-path', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csvPath: result.path })
+                });
+            } catch (error) {
+                showError('CSV Load Error', error.message);
+            }
+        }
+
+        async function loadCsvFile(path) {
+            try {
+                const url = path ? `http://localhost:3000/csv?path=${encodeURIComponent(path)}` : 'http://localhost:3000/csv';
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.error) {
+                    showError('CSV Load Error', result.error);
+                    return;
+                }
+                document.getElementById('csvEditor').value = result.data;
+                currentCsvPath = result.path;
+                displayCsvData(result.data);
+                
+                // Update current CSV path for predictions and visualizations
+                await fetch('http://localhost:3000/update-csv-path', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csvPath: result.path })
+                });
+            } catch (error) {
+                showError('CSV Load Error', error.message);
+            }
+        }
+
+        function showError(title, message) {
+            const modal = document.createElement('div');
+            modal.className = 'error-modal';
+            modal.innerHTML = `
+                <div class="error-content">
+                    <h3>${title}</h3>
+                    <div class="error-text">${message}</div>
+                    <button onclick="this.parentElement.parentElement.remove()">Close</button>
+                    <button onclick="navigator.clipboard.writeText('${message.replace(/'/g, "\\'")}')">Copy Error</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function displayCsvData(csvData) {
+            const lines = csvData.trim().split('\n');
+            const headers = lines[0].split(',');
+            const rows = lines.slice(1);
+            
+            let table = '<table><thead><tr>';
+            headers.forEach(header => {
+                table += `<th>${header.trim()}</th>`;
+            });
+            table += '</tr></thead><tbody>';
+            
+            rows.forEach((row, rowIndex) => {
+                const cells = row.split(',');
+                table += '<tr>';
+                cells.forEach((cell, cellIndex) => {
+                    const editable = isEditingEnabled ? 'true' : 'false';
+                    const bgColor = isEditingEnabled ? 'background: #fff8dc;' : '';
+                    table += `<td contenteditable="${editable}" style="${bgColor}" onblur="updateCsvData(${rowIndex}, ${cellIndex}, this.textContent)">${cell.trim()}</td>`;
+                });
+                table += '</tr>';
+            });
+            
+            table += '</tbody></table>';
+            document.getElementById('csvTable').innerHTML = table;
+        }
+        
+        function updateCsvData(row, col, value) {
+            const lines = document.getElementById('csvEditor').value.split('\n');
+            const cells = lines[row + 1].split(',');
+            cells[col] = value;
+            lines[row + 1] = cells.join(',');
+            document.getElementById('csvEditor').value = lines.join('\n');
+        }
+        
+        function toggleView() {
+            isTableView = !isTableView;
+            if (isTableView) {
+                document.getElementById('csvTable').classList.remove('hidden');
+                document.getElementById('csvEditor').classList.add('hidden');
+            } else {
+                document.getElementById('csvTable').classList.add('hidden');
+                document.getElementById('csvEditor').classList.remove('hidden');
+            }
+        }
+
+        function toggleEdit() {
+            isEditingEnabled = !isEditingEnabled;
+            const btn = document.getElementById('editBtn');
+            btn.textContent = isEditingEnabled ? 'Disable Editing' : 'Enable Editing';
+            btn.style.background = isEditingEnabled ? '#dc3545' : '#28a745';
+            if (isTableView) {
+                displayCsvData(document.getElementById('csvEditor').value);
+            }
+        }
+        
+        async function downloadTemplate() {
+            try {
+                const response = await fetch('http://localhost:3000/csv');
+                const result = await response.json();
+                if (result.error) {
+                    showError('Template Download Error', result.error);
+                    return;
+                }
+                
+                const blob = new Blob([result.data], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'study_cost_template.csv';
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                showError('Template Download Error', error.message);
+            }
+        }
+
+        async function saveCsv() {
+            try {
+                const response = await fetch('http://localhost:3000/csv', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        data: document.getElementById('csvEditor').value,
+                        path: currentCsvPath
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('CSV saved successfully!');
+                } else {
+                    showError('CSV Save Error', result.error);
+                }
+            } catch (error) {
+                showError('CSV Save Error', error.message);
+            }
+        }
+        
+        let selectedCharts = [];
+        
+        function openChartSelector() {
+            const overlay = document.createElement('div');
+            overlay.className = 'popup-overlay';
+            overlay.onclick = () => overlay.remove();
+            
+            const modal = document.createElement('div');
+            modal.className = 'chart-selector';
+            modal.onclick = (e) => e.stopPropagation();
+            
+            const charts = [
+                {value: 'heatmap', label: 'Correlation Heatmap'},
+                {value: 'histogram', label: 'Tuition Distribution'},
+                {value: 'boxplot', label: 'Living Cost by Country'},
+                {value: 'scatter', label: 'Tuition vs Total Cost'},
+                {value: 'bar', label: 'Average Cost by Level'},
+                {value: 'pie', label: 'Country Distribution'},
+                {value: 'violin', label: 'Cost Distribution Shape'},
+                {value: 'line', label: 'Cost Trends by Duration'},
+                {value: 'area', label: 'Cumulative Costs'},
+                {value: 'bubble', label: 'Multi-Factor Analysis'}
+            ];
+            
+            let chartListHtml = '<div class="chart-list">';
+            charts.forEach(chart => {
+                const checked = selectedCharts.includes(chart.value) ? 'checked' : '';
+                chartListHtml += `
+                    <div class="chart-item">
+                        <input type="checkbox" id="${chart.value}" value="${chart.value}" ${checked} onchange="updateSelection(this)">
+                        <label for="${chart.value}">${chart.label}</label>
+                    </div>`;
+            });
+            chartListHtml += '</div>';
+            
+            modal.innerHTML = `
+                <h3>Select Charts for Report (Max 5)</h3>
+                ${chartListHtml}
+                <div style="margin-top: 20px;">
+                    <button onclick="generateReportWithCharts()">Generate Report</button>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="margin-left: 10px;">Cancel</button>
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+        
+        function updateSelection(checkbox) {
+            if (checkbox.checked) {
+                if (selectedCharts.length >= 5) {
+                    checkbox.checked = false;
+                    alert('Maximum 5 charts allowed');
+                    return;
+                }
+                selectedCharts.push(checkbox.value);
+            } else {
+                selectedCharts = selectedCharts.filter(chart => chart !== checkbox.value);
+            }
+        }
+        
+        async function generateReportWithCharts() {
+            if (selectedCharts.length === 0) {
+                alert('Please select at least one chart');
+                return;
+            }
+            
+            document.querySelector('.popup-overlay').remove();
+            await loadReportData();
+        }
+        
+        async function loadReportData() {
+            if (selectedCharts.length === 0) {
+                document.getElementById('reportData').innerHTML = '<p>Please select charts first.</p>';
+                return;
+            }
+            
+            showLoading('📄 Generating comprehensive report...<br>📊 Including selected charts and predictions...');
+            
+            let reportHtml = `
+                <h2>🎓 Study Abroad Cost Analysis Report</h2>
+                <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>`;
+            
+            // Add prediction data if available
+            if (lastPrediction && lastInputs) {
+                reportHtml += `
+                    <h3>📝 Input Parameters</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                        <tr><td style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2; width: 50%;"><strong>Parameter</strong></td><td style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;"><strong>Entered Value</strong></td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Duration (Years)</td><td style="border: 1px solid #ddd; padding: 8px;">${lastInputs.duration}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Tuition Fee (USD)</td><td style="border: 1px solid #ddd; padding: 8px;">$${lastInputs.tuition.toLocaleString()}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Monthly Rent (USD)</td><td style="border: 1px solid #ddd; padding: 8px;">$${lastInputs.rent.toLocaleString()}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Visa Application Fee (USD)</td><td style="border: 1px solid #ddd; padding: 8px;">$${lastInputs.visa_fee.toLocaleString()}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Health Insurance (USD)</td><td style="border: 1px solid #ddd; padding: 8px;">$${lastInputs.insurance.toLocaleString()}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Currency Exchange Rate</td><td style="border: 1px solid #ddd; padding: 8px;">${lastInputs.exchange_rate}</td></tr>
+                        <tr><td style="border: 1px solid #ddd; padding: 8px;">Living Cost Index</td><td style="border: 1px solid #ddd; padding: 8px;">${lastInputs.living_cost_index}</td></tr>
+                    </table>
+                    
+                    <h3>💰 Prediction Output</h3>
+                    <div style="background: #e8f5e8; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+                        <h2 style="color: #28a745; margin: 0;">Estimated Total Annual Cost</h2>
+                        <h1 style="color: #007bff; margin: 10px 0;">$${lastPrediction.toLocaleString('en-US', {minimumFractionDigits: 2})}</h1>
+                        <p style="margin: 0; color: #666;">Based on Machine Learning Analysis</p>
+                    </div>`;
+            } else {
+                reportHtml += '<p style="color: #666; font-style: italic;">No prediction data available. Please run a cost prediction first.</p>';
+            }
+            
+            // Add selected charts
+            if (selectedCharts.length > 0) {
+                reportHtml += '<h3>📊 Selected Data Visualizations</h3>';
+                
+                for (const chartType of selectedCharts) {
+                    try {
+                        const response = await fetch('http://localhost:3000/visualize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ csvPath: currentCsvPath, chartType: chartType })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.image) {
+                            const chartTitles = {
+                                'heatmap': 'Correlation Heatmap',
+                                'histogram': 'Tuition Distribution',
+                                'boxplot': 'Living Cost by Country',
+                                'scatter': 'Tuition vs Total Cost',
+                                'bar': 'Average Cost by Level',
+                                'pie': 'Country Distribution',
+                                'violin': 'Cost Distribution Shape',
+                                'line': 'Cost Trends by Duration',
+                                'area': 'Cumulative Costs',
+                                'bubble': 'Multi-Factor Analysis'
+                            };
+                            const chartTitle = chartTitles[chartType] || chartType;
+                            reportHtml += `<div style="margin: 30px 0; text-align: center; page-break-inside: avoid;">
+                                <h4 style="margin-bottom: 15px;">${chartTitle}</h4>
+                                <img src="data:image/png;base64,${result.image}" style="max-width: 100%; height: auto; border: 1px solid #ddd;">
+                            </div>`;
+                        } else if (result.plotly) {
+                            const chartTitles = {
+                                'heatmap': 'Correlation Heatmap',
+                                'histogram': 'Tuition Distribution',
+                                'boxplot': 'Living Cost by Country',
+                                'scatter': 'Tuition vs Total Cost',
+                                'bar': 'Average Cost by Level',
+                                'pie': 'Country Distribution',
+                                'violin': 'Cost Distribution Shape',
+                                'line': 'Cost Trends by Duration',
+                                'area': 'Cumulative Costs',
+                                'bubble': 'Multi-Factor Analysis'
+                            };
+                            const chartTitle = chartTitles[chartType] || chartType;
+                            reportHtml += `<div style="margin: 30px 0; text-align: center; page-break-inside: avoid;">
+                                <h4 style="margin-bottom: 15px;">${chartTitle}</h4>
+                                <p>Interactive chart - Please use Visualize Data tab to view</p>
+                            </div>`;
+                        }
+                    } catch (error) {
+                        reportHtml += `<p>Error loading ${chartType} chart: ${error.message}</p>`;
+                    }
+                }
+            }
+            
+            hideLoading();
+            document.getElementById('reportData').innerHTML = reportHtml;
+        }
+        
+
+        
+        function printReport() {
+            const originalContent = document.body.innerHTML;
+            const reportContent = document.getElementById('reportContent').innerHTML;
+            
+            document.body.innerHTML = `
+                <div style="font-family: Arial, sans-serif; margin: 20px;">
+                    ${reportContent}
+                </div>
+            `;
+            
+            window.print();
+            document.body.innerHTML = originalContent;
+            location.reload();
+        }
+        
+        // Prevent startup blinking
+        window.addEventListener('DOMContentLoaded', () => {
+            document.querySelector('.container').classList.add('loaded');
+        });
+        
+        // Right-click context menu
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            try {
+                const { remote } = require('electron');
+                const { Menu, MenuItem } = remote;
+            
+            const menu = new Menu();
+            menu.append(new MenuItem({
+                label: 'Reload App',
+                click: () => location.reload()
+            }));
+            menu.append(new MenuItem({ type: 'separator' }));
+            menu.append(new MenuItem({
+                label: 'Help',
+                click: () => showHelp()
+            }));
+            menu.append(new MenuItem({
+                label: "Developer's Info",
+                click: () => showDeveloperInfo()
+            }));
+            menu.append(new MenuItem({
+                label: 'License',
+                click: () => showLicense()
+            }));
+            
+                menu.popup({ window: remote.getCurrentWindow() });
+            } catch (error) {
+                console.log('Context menu error:', error);
+                // Fallback to custom menu
+                showCustomContextMenu(e);
+            }
+        });
+        
+        function showCustomContextMenu(e) {
+            const menu = document.createElement('div');
+            menu.style.cssText = `
+                position: fixed;
+                top: ${e.clientY}px;
+                left: ${e.clientX}px;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                z-index: 10000;
+                min-width: 150px;
+            `;
+            
+            const items = [
+                { label: 'Reload App', action: () => location.reload() },
+                { label: 'Help', action: showHelp },
+                { label: "Developer's Info", action: showDeveloperInfo },
+                { label: 'License', action: showLicense }
+            ];
+            
+            items.forEach(item => {
+                const menuItem = document.createElement('div');
+                menuItem.textContent = item.label;
+                menuItem.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;';
+                menuItem.onmouseover = () => menuItem.style.background = '#f0f0f0';
+                menuItem.onmouseout = () => menuItem.style.background = 'white';
+                menuItem.onclick = () => {
+                    item.action();
+                    menu.remove();
+                };
+                menu.appendChild(menuItem);
+            });
+            
+            document.body.appendChild(menu);
+            
+            // Remove menu when clicking elsewhere
+            setTimeout(() => {
+                document.addEventListener('click', () => menu.remove(), { once: true });
+            }, 100);
+        }
+        
+        function showHelp() {
+            const overlay = document.createElement('div');
+            overlay.className = 'popup-overlay';
+            overlay.onclick = () => overlay.remove();
+            
+            const modal = document.createElement('div');
+            modal.className = 'chart-selector';
+            modal.style.maxWidth = '600px';
+            modal.onclick = (e) => e.stopPropagation();
+            
+            modal.innerHTML = `
+                <h3>📚 How to Use Study Abroad Cost Predictor</h3>
+                <div style="max-height: 400px; overflow-y: auto; text-align: left; line-height: 1.6;">
+                    <h4>🎯 Cost Prediction</h4>
+                    <p>1. Enter your study parameters (duration, tuition, rent, etc.)<br>
+                    2. Click "Predict Cost" to get ML-powered estimation<br>
+                    3. View results in popup window</p>
+                    
+                    <h4>📊 Data Visualization</h4>
+                    <p>1. Select chart type from dropdown (25+ options)<br>
+                    2. Charts load with smooth animations<br>
+                    3. Interactive charts support zoom and hover</p>
+                    
+                    <h4>📝 CSV Data Management</h4>
+                    <p>1. Default dataset loads automatically<br>
+                    2. Use "Select CSV File" for custom data<br>
+                    3. Enable editing to modify table cells<br>
+                    4. Toggle between table and text editor views</p>
+                    
+                    <h4>📄 Report Generation</h4>
+                    <p>1. Click "Select Charts for Report"<br>
+                    2. Choose up to 5 charts using checkboxes<br>
+                    3. Click "Generate Report" to create comprehensive report<br>
+                    4. Use "Print Report" for hard copies</p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px;">Close</button>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+        
+        function showDeveloperInfo() {
+            const overlay = document.createElement('div');
+            overlay.className = 'popup-overlay';
+            overlay.onclick = () => overlay.remove();
+            
+            const modal = document.createElement('div');
+            modal.className = 'chart-selector';
+            modal.style.maxWidth = '600px';
+            modal.onclick = (e) => e.stopPropagation();
+            
+            modal.innerHTML = `
+                <h3>👥 Developer Information</h3>
+                <div style="max-height: 400px; overflow-y: auto; text-align: left; line-height: 1.6;">
+                    <h4>🚀 Project: Study Abroad Cost Predictor</h4>
+                    <p><strong>Version:</strong> 1.0.0<br>
+                    <strong>License:</strong> MIT License</p>
+                    
+                    <h4>👨‍💻 Developers</h4>
+                    <p><strong>Sejal PV</strong> - Original work<br>
+                    GitHub: <a href="#" onclick="require('electron').shell.openExternal('https://github.com/sejal-pv')">github.com/sejal-pv</a></p>
+                    
+                    <p><strong>Savan S Vernekar</strong> - Contributor<br>
+                    GitHub: <a href="#" onclick="require('electron').shell.openExternal('https://github.com/savan-s-vernekar')">github.com/savan-s-vernekar</a></p>
+                    
+                    <h4>🔗 Project Links</h4>
+                    <p><strong>Repository:</strong> <a href="#" onclick="require('electron').shell.openExternal('https://github.com/sejal-pv/ML_model_to_predict_international_study_cost')">GitHub Project</a><br>
+                    <strong>Issues:</strong> <a href="#" onclick="require('electron').shell.openExternal('https://github.com/sejal-pv/ML_model_to_predict_international_study_cost/issues')">Report Bugs</a><br>
+                    <strong>Contribute:</strong> <a href="#" onclick="require('electron').shell.openExternal('https://github.com/sejal-pv/ML_model_to_predict_international_study_cost/pulls')">Pull Requests</a></p>
+                    
+                    <h4>📋 Release Notes</h4>
+                    <p><strong>v1.0.0</strong> - Initial Release<br>
+                    • ML-powered cost prediction<br>
+                    • 25+ chart visualizations<br>
+                    • CSV data management<br>
+                    • PDF report generation<br>
+                    • Cross-platform support</p>
+                    
+                    <p style="margin-top: 20px; font-style: italic; color: #666;">Made with ❤️ in India</p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px;">Close</button>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+        
+        function showLicense() {
+            const overlay = document.createElement('div');
+            overlay.className = 'popup-overlay';
+            overlay.onclick = () => overlay.remove();
+            
+            const modal = document.createElement('div');
+            modal.className = 'chart-selector';
+            modal.style.maxWidth = '600px';
+            modal.onclick = (e) => e.stopPropagation();
+            
+            modal.innerHTML = `
+                <h3>📄 MIT License</h3>
+                <div style="max-height: 400px; overflow-y: auto; text-align: left; line-height: 1.6; font-family: monospace; font-size: 12px;">
+                    <p><strong>Copyright (c) 2024 Sejal PV, Savan S Vernekar</strong></p>
+                    
+                    <p>Permission is hereby granted, free of charge, to any person obtaining a copy
+                    of this software and associated documentation files (the "Software"), to deal
+                    in the Software without restriction, including without limitation the rights
+                    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                    copies of the Software, and to permit persons to whom the Software is
+                    furnished to do so, subject to the following conditions:</p>
+                    
+                    <p>The above copyright notice and this permission notice shall be included in all
+                    copies or substantial portions of the Software.</p>
+                    
+                    <p><strong>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+                    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+                    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+                    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+                    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+                    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+                    SOFTWARE.</strong></p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px;">Close</button>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+    </script>
+</body>
+</html>
